@@ -8,16 +8,9 @@ endef
 
 help:
 	@echo "install - install dependencies with poetry"
-	@echo "test - run unit tests"
 	@echo "lint - run linter and checks"
-	@echo "check - run static checks"
 	@echo "run - run routes"
 
-test:
-	poetry run pytest -vv test
-
-check:
-	./static_checks.sh
 
 lint:
 	./linter.sh

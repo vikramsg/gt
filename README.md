@@ -21,22 +21,6 @@ Once you have Poetry setup, you can simply go to the root of the directory and d
 make install
 ```
 
-## Tests
-
-The project has static checks, which checks for formatting and typing and unit tests.
-
-Invoke static checks using
-
-```
-make check
-```
-
-and tests using
-
-```
-make test
-```
-
 
 ## Run
 
