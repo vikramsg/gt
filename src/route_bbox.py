@@ -19,13 +19,14 @@ class Solution:
         )
 
         # Label width and height
+        # Taking a bigger value spreads it out
         self.width = 200
         self.height = 100
 
         # Tolerance for checking overlap
         self.tolerance = 50
 
-    def _route_bbox(self, route):
+    def route_bbox(self, route):
         """For a single polyline return bounding box
 
         Args:
@@ -42,7 +43,7 @@ class Solution:
             np.max(route[:, 1]),
         )
 
-    def _bbox(self, routes):
+    def bbox(self, routes):
         """Get bbox of all routes
 
         Args:
@@ -54,10 +55,10 @@ class Solution:
 
         ToDo: These are all ints, we should use Int specialization
         """
-        bbox_routes = self._route_bbox(routes[0])
+        bbox_routes = self.route_bbox(routes[0])
         if len(routes) > 1:
             for route in routes:
-                bbox_route = self._route_bbox(route)
+                bbox_route = self.route_bbox(route)
                 bbox_routes = (
                     np.min([bbox_routes[0], bbox_route[0]]),
                     np.min([bbox_routes[1], bbox_route[1]]),
@@ -68,7 +69,7 @@ class Solution:
         return bbox_routes
 
     def bbox_center(self):
-        bbox = self._bbox(self.routes)
+        bbox = self.bbox(self.routes)
 
         return 0.5 * (bbox[0] + bbox[2]), 0.5 * (bbox[1] + bbox[3])
 
@@ -187,6 +188,8 @@ class Solution:
             while True:
                 # Move away from center point if we don't find a match
                 closest_point = route[self.closest_indices[it] + counter]
+                # Find origin of label rectangle
+                # If no rectangle, we get None
                 rectangle_origin = self.get_route_label_origin(
                     closest_point, self.routes
                 )
