@@ -68,56 +68,99 @@ class Solution:
         return 0.5 * (bbox[0] + bbox[2]), 0.5 * (bbox[1] + bbox[3])
 
     def line_rectangle_intersection(
-        self, x1, y1, x2, y2, rect_left, rect_top, rect_width, rect_height
+        self, line_points, rect_left, rect_top, rect_width, rect_height
     ):
         rect_right = rect_left + rect_width
         rect_bottom = rect_top + rect_height
 
-        if x1 == x2:
-            if rect_left < x1 < rect_right or rect_left < x2 < rect_right:
-                if (
-                    y1 < rect_bottom < y2
-                    or y2 < rect_bottom < y1
-                    or y1 < rect_top < y2
-                    or y2 < rect_top < y1
-                ):
-                    return 1
+        x1, y1 = line_points[:-1].T
+        x2, y2 = line_points[1:].T
 
-        else:
-            # Calculate the slope of the line segment
-            m = (y2 - y1) / (x2 - x1)
+        vertical_mask = np.abs(x1 - x2) < 1e-8
+        horizontal_mask = np.abs(y1 - y2) < 1e-8
 
-            # Calculate the y-intercept of the line segment
-            b = y1 - m * x1
+        # Check for vertical line segments
+        if np.any(vertical_mask):
+            vertical_segments_mask = np.logical_and(
+                rect_left < x1[vertical_mask], rect_right > x1[vertical_mask]
+            )
+            vertical_segments_mask &= np.logical_and(
+                rect_top < np.maximum(y1[vertical_mask], y2[vertical_mask]),
+                rect_bottom > np.minimum(y1[vertical_mask], y2[vertical_mask]),
+            )
+            if np.any(vertical_segments_mask):
+                return 1
 
-            # Check intersection with left edge of the rectangle
-            if x1 <= rect_left <= x2 or x2 <= rect_left <= x1:
-                y = m * rect_left + b
-                if rect_top < y < rect_bottom:
-                    return 1
+        # Check for horizontal line segments
+        if np.any(horizontal_mask):
+            horizontal_segments_mask = np.logical_and(
+                rect_top < y1[horizontal_mask], rect_bottom > y1[horizontal_mask]
+            )
+            horizontal_segments_mask &= np.logical_and(
+                rect_left < np.maximum(x1[horizontal_mask], x2[horizontal_mask]),
+                rect_right > np.minimum(x1[horizontal_mask], x2[horizontal_mask]),
+            )
+            if np.any(horizontal_segments_mask):
+                return 1
 
-            # Check intersection with right edge of the rectangle
-            if x1 <= rect_right <= x2 or x2 <= rect_right <= x1:
-                y = m * rect_right + b
-                if rect_top < y < rect_bottom:
-                    return 1
+        # Calculate the slope of non-vertical, non-horizontal line segments
+        non_vertical_horizontal_mask = np.logical_and(~vertical_mask, ~horizontal_mask)
+        slope = (
+            y2[non_vertical_horizontal_mask] - y1[non_vertical_horizontal_mask]
+        ) / (x2[non_vertical_horizontal_mask] - x1[non_vertical_horizontal_mask])
+        intercept = (
+            y1[non_vertical_horizontal_mask] - slope * x1[non_vertical_horizontal_mask]
+        )
 
-            # Check intersection with top edge of the rectangle
-            if y1 <= rect_top <= y2 or y2 <= rect_top <= y1:
-                if m != 0:
-                    x = (rect_top - b) / m
-                    if rect_left < x < rect_right:
-                        return 1
+        # Check intersection with left edge of the rectangle
+        left_mask = np.logical_and(
+            x1[non_vertical_horizontal_mask] < rect_left,
+            x2[non_vertical_horizontal_mask] > rect_left,
+        )
+        left_mask &= np.logical_and(
+            rect_top < slope * rect_left + intercept,
+            slope * rect_left + intercept < rect_bottom,
+        )
+        if np.any(left_mask):
+            return 1
 
-            # Check intersection with bottom edge of the rectangle
-            if y1 <= rect_bottom <= y2 or y2 <= rect_bottom <= y1:
-                if m != 0:
-                    x = (rect_bottom - b) / m
-                    if rect_left < x < rect_right:
-                        return 1
+        # Check intersection with right edge of the rectangle
+        right_mask = np.logical_and(
+            x1[non_vertical_horizontal_mask] < rect_right,
+            x2[non_vertical_horizontal_mask] > rect_right,
+        )
+        right_mask &= np.logical_and(
+            rect_top < slope * rect_right + intercept,
+            slope * rect_right + intercept < rect_bottom,
+        )
+        if np.any(right_mask):
+            return 1
 
-            # No intersection
-            return 0
+        # Check intersection with top edge of the rectangle
+        top_mask = np.logical_and(
+            y1[non_vertical_horizontal_mask] < rect_top,
+            y2[non_vertical_horizontal_mask] > rect_top,
+        )
+        top_mask &= np.logical_and(
+            rect_left < (rect_top - intercept) / slope,
+            (rect_top - intercept) / slope < rect_right,
+        )
+        if np.any(top_mask):
+            return 1
+
+        # Check intersection with bottom edge of the rectangle
+        bottom_mask = np.logical_and(
+            y1[non_vertical_horizontal_mask] < rect_bottom,
+            y2[non_vertical_horizontal_mask] > rect_bottom,
+        )
+        bottom_mask &= np.logical_and(
+            rect_left < (rect_bottom - intercept) / slope,
+            (rect_bottom - intercept) / slope < rect_right,
+        )
+        if np.any(bottom_mask):
+            return 1
+
+        return 0
 
     def route_points_closest_to_center(self, bbox_center, routes):
         closest_indices = []
@@ -130,24 +173,15 @@ class Solution:
 
     def routes_rectangle_intersection_at_point(self, routes, origin, width, height):
         flag = 1
-        while flag:
-            counter = 0
-            route = routes[counter]
-            for it, point in enumerate(route[:-1]):
-                if self.line_rectangle_intersection(
-                    point[0],
-                    point[1],
-                    route[it + 1][0],
-                    route[it + 1][1],
-                    origin[0],
-                    origin[1],
-                    width,
-                    height,
-                ):
-                    flag = 0
-                    break
-            counter += 1
-            if counter >= len(routes):
+        for route in routes:
+            if self.line_rectangle_intersection(
+                route,
+                origin[0],
+                origin[1],
+                width,
+                height,
+            ):
+                flag = 0
                 break
         return flag
 
@@ -190,10 +224,22 @@ class Solution:
         return f"{prefix}-{suffix}"
 
     def write_label_locations(self, output_path):
+        label_dict = {}
         for it, route in enumerate(self.routes):
             closest_point = route[self.closest_indices[it]]
             rectangle_origin = self.get_route_label_origin(closest_point, self.routes)
-            print(self.get_label_position(closest_point, rectangle_origin))
+            label_position = self.get_label_position(closest_point, rectangle_origin)
+            label_dict[it] = {
+                "point_x": closest_point[0],
+                "point_y": closest_point[1],
+                "position": label_position,
+            }
+
+        with open(output_path, "w") as fp:
+            for it in range(len(self.routes)):
+                fp.write(
+                    f"""{label_dict[it]["point_x"]} {label_dict[it]["point_y"]} {label_dict[it]["position"]}\n"""
+                )
 
 
 if __name__ == "__main__":
