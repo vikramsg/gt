@@ -21,3 +21,8 @@ run:
 	$(call REQUIRE,ROUTE_FILE)
 	$(call REQUIRE,OUTPUT_FILE)
 	poetry run python -m src.route $(ROUTE_FILE) $(OUTPUT_FILE)
+
+run_intersection_based:
+	$(call REQUIRE,ROUTE_FILE)
+	$(call REQUIRE,OUTPUT_FILE)
+	poetry run python -m src.route_intersection_based $(ROUTE_FILE) $(OUTPUT_FILE)
