@@ -19,10 +19,10 @@ class Solution:
         )
 
         self.cell_width, self.cell_height = None, None
-        self.grid_x, self.grid_y = self.create_grid(self.routes)
+        self.grid_x, self.grid_y = self._create_grid(self.routes)
 
     def bbox_center(self):
-        bbox = self.bbox(self.routes)
+        bbox = self._bbox(self.routes)
 
         return 0.5 * (bbox[0] + bbox[2]), 0.5 * (bbox[1] + bbox[3])
 
@@ -35,7 +35,7 @@ class Solution:
 
         return closest_indices
 
-    def route_bbox(self, route):
+    def _route_bbox(self, route):
         """For a single polyline return bounding box
 
         Args:
@@ -52,7 +52,7 @@ class Solution:
             np.max(route[:, 1]),
         )
 
-    def bbox(self, routes):
+    def _bbox(self, routes):
         """Get bbox of all routes
 
         Args:
@@ -64,10 +64,10 @@ class Solution:
 
         ToDo: These are all ints, we should use Int specialization
         """
-        bbox_routes = self.route_bbox(routes[0])
+        bbox_routes = self._route_bbox(routes[0])
         if len(routes) > 1:
             for route in routes:
-                bbox_route = self.route_bbox(route)
+                bbox_route = self._route_bbox(route)
                 bbox_routes = (
                     np.min([bbox_routes[0], bbox_route[0]]),
                     np.min([bbox_routes[1], bbox_route[1]]),
@@ -77,9 +77,12 @@ class Solution:
 
         return bbox_routes
 
-    def create_grid(self, routes, label_width=100, label_height=50):
+    def _create_grid(self, routes, label_width=100, label_height=50):
+        """
+        Create a rectangular grid within a bbox with given width and height
+        """
         # ToDo: label width and height could be associated to zoom level
-        routes_bbox = self.bbox(routes)
+        routes_bbox = self._bbox(routes)
         # Extend the bbox by width and height on both sides
         routes_bbox = (
             routes_bbox[0] - label_width,
@@ -113,7 +116,7 @@ class Solution:
 
         return np.meshgrid(x, y)
 
-    def refine_line(self, points, n):
+    def _refine_line(self, points, n):
         """
         Refine a route by n number of points which is tunable
         """
@@ -128,7 +131,7 @@ class Solution:
         refined_points = np.array(refined_points)
         return refined_points
 
-    def determine_cell(self, point, cell_size_x, cell_size_y):
+    def _determine_cell_containing_point(self, point, cell_size_x, cell_size_y):
         """
         This only works if the grid starts at 0,0
         and has uniform rectangle cells
@@ -140,7 +143,7 @@ class Solution:
         cell_y = np.floor(point[1] / cell_size_y).astype(int)
         return cell_x, cell_y
 
-    def inside_cell(self, point, cell_x, cell_y, grid_x, grid_y):
+    def _is_inside_cell(self, point, cell_x, cell_y, grid_x, grid_y):
         if (
             point[0] > grid_x[cell_y][cell_x]
             and point[0] < grid_x[cell_y][cell_x + 1]
@@ -151,23 +154,25 @@ class Solution:
         else:
             return 0
 
-    def get_occupancy(self, route, grid_x, grid_y, occupancy):
+    def _get_occupancy(self, route, grid_x, grid_y, occupancy):
         cell_width = grid_x[0][1] - grid_x[0][0]
         cell_height = grid_y[1][0] - grid_y[0][0]
 
-        refined_points = self.refine_line(route, 4)
+        refined_points = self._refine_line(route, 4)
         for point in refined_points:
-            cell_x, cell_y = self.determine_cell(point, cell_width, cell_height)
+            cell_x, cell_y = self._determine_cell_containing_point(
+                point, cell_width, cell_height
+            )
 
             # IF it is already 1, we want to retain it, so doing an or
             occupancy[cell_y][cell_x] = (
-                self.inside_cell(point, cell_x, cell_y, grid_x, grid_y)
+                self._is_inside_cell(point, cell_x, cell_y, grid_x, grid_y)
                 or occupancy[cell_y][cell_x]
             )
 
         return occupancy
 
-    def find_closest_empty_occupancy(self, cell_x, cell_y, occupancy):
+    def _find_closest_empty_occupancy(self, cell_x, cell_y, occupancy):
         size_y, size_x = occupancy.shape
 
         min_distance = size_x**2 + size_y**2
@@ -182,14 +187,14 @@ class Solution:
 
         return closest_x, closest_y
 
-    def find_closest_point_to_cell(self, cell_x, cell_y, route):
+    def _find_closest_point_to_cell(self, cell_x, cell_y, route):
         cell_point = self.grid_x[cell_y][cell_x], self.grid_y[cell_y][cell_x]
         distances = np.linalg.norm(route - cell_point, axis=1)
         closest_index = np.argmin(distances)
 
         return closest_index
 
-    def get_dict_for_cell(
+    def _get_dict_for_cell(
         self, key, route, route_point, cell_x, cell_y, occupancy, label_dict
     ):
         if not occupancy[cell_y][cell_x]:
@@ -226,7 +231,7 @@ class Solution:
         else:
             # We have to determine closest point inside occupancy that is not occupied
             # FIXME: Then we find closest point to this on route
-            closest_x, closest_y = self.find_closest_empty_occupancy(
+            closest_x, closest_y = self._find_closest_empty_occupancy(
                 cell_x, cell_y, occupancy
             )
             if closest_x > cell_x:
@@ -238,7 +243,9 @@ class Solution:
             else:
                 prefix = "top"
 
-            closest_index = self.find_closest_point_to_cell(closest_x, closest_y, route)
+            closest_index = self._find_closest_point_to_cell(
+                closest_x, closest_y, route
+            )
             label_dict[key] = {
                 "point_x": route[closest_index][0],
                 "point_y": route[closest_index][1],
@@ -248,17 +255,17 @@ class Solution:
 
         return label_dict
 
-    def get_label_locations(self, np_routes, closest_indices, occupancy):
+    def _get_label_locations(self, np_routes, closest_indices, occupancy):
         label_dict = {}
         for it, route in enumerate(np_routes):
             closest_to_center_index = closest_indices[it]
             # For now, all we will do is fill up the closes non-occupied cell
             route_point = route[closest_to_center_index]
-            cell_x, cell_y = self.determine_cell(
+            cell_x, cell_y = self._determine_cell_containing_point(
                 route_point, self.cell_width, self.cell_height
             )
 
-            self.get_dict_for_cell(
+            self._get_dict_for_cell(
                 it, route, route_point, cell_x, cell_y, occupancy, label_dict
             )
 
@@ -279,14 +286,14 @@ class Solution:
         # For points in each polyline, iterate over them and set occupancy to 1
         # if the refined version of the lines lies inside a box
         for route in self.routes:
-            occupancy = self.get_occupancy(route, grid_x, grid_y, occupancy)
+            occupancy = self._get_occupancy(route, grid_x, grid_y, occupancy)
 
         # Now using occupancy we determine what cells are available close to the mid point
         # We could try reusing the refined points to shift slightly in either direction
         # and determine an empty cell close by
         # For now, we just create a dict for this
 
-        label_dict = self.get_label_locations(
+        label_dict = self._get_label_locations(
             self.routes, self.closest_indices, occupancy
         )
 

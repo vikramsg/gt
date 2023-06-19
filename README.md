@@ -38,9 +38,11 @@ make run ROUTE_FILE=zurich_bern_routes.txt OUTPUT_FILE=labels_zurich_bern.txt
 3. Then we try to find empty cells close to the center of the grid
 4. If they exist, then we set that to be the required location
 5. If not, we find the closest empty cell and set that. 
+6. We use NumPy arrays for everything for performance.
 
 
 ### Enhancements
 1. There are bugs with the current approach which seems to not show the correct occupancy
 2. We can get rid of a lot of for loops and use vectorization
 3. To find aesthetically pleasing locations, we want to make sure that the cell lines don't have multiple overlaps with the route
+4. Read file directly into NumPy and then reshape
