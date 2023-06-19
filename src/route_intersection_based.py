@@ -181,6 +181,7 @@ class Solution:
 
     def write_label_locations(self, output_path):
         label_dict = {}
+        # To check for rectangle overlap
         rect_left = []
         rect_top = []
         for it, route in enumerate(self.routes):
