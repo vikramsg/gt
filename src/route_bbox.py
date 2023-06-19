@@ -17,8 +17,13 @@ class Solution:
         self.closest_indices = self.route_points_closest_to_center(
             self.bbox_center, self.routes
         )
-        self.width = 100
-        self.height = 50
+
+        # Label width and height
+        self.width = 200
+        self.height = 100
+
+        # Tolerance for checking overlap
+        self.tolerance = 50
 
     def _route_bbox(self, route):
         """For a single polyline return bounding box
@@ -73,94 +78,16 @@ class Solution:
         rect_right = rect_left + rect_width
         rect_bottom = rect_top + rect_height
 
-        x1, y1 = line_points[:-1].T
-        x2, y2 = line_points[1:].T
-
-        vertical_mask = np.abs(x1 - x2) < 1e-8
-        horizontal_mask = np.abs(y1 - y2) < 1e-8
-
-        # Check for vertical line segments
-        if np.any(vertical_mask):
-            vertical_segments_mask = np.logical_and(
-                rect_left < x1[vertical_mask], rect_right > x1[vertical_mask]
-            )
-            vertical_segments_mask &= np.logical_and(
-                rect_top < np.maximum(y1[vertical_mask], y2[vertical_mask]),
-                rect_bottom > np.minimum(y1[vertical_mask], y2[vertical_mask]),
-            )
-            if np.any(vertical_segments_mask):
-                return 1
-
-        # Check for horizontal line segments
-        if np.any(horizontal_mask):
-            horizontal_segments_mask = np.logical_and(
-                rect_top < y1[horizontal_mask], rect_bottom > y1[horizontal_mask]
-            )
-            horizontal_segments_mask &= np.logical_and(
-                rect_left < np.maximum(x1[horizontal_mask], x2[horizontal_mask]),
-                rect_right > np.minimum(x1[horizontal_mask], x2[horizontal_mask]),
-            )
-            if np.any(horizontal_segments_mask):
-                return 1
-
-        # Calculate the slope of non-vertical, non-horizontal line segments
-        non_vertical_horizontal_mask = np.logical_and(~vertical_mask, ~horizontal_mask)
-        slope = (
-            y2[non_vertical_horizontal_mask] - y1[non_vertical_horizontal_mask]
-        ) / (x2[non_vertical_horizontal_mask] - x1[non_vertical_horizontal_mask])
-        intercept = (
-            y1[non_vertical_horizontal_mask] - slope * x1[non_vertical_horizontal_mask]
-        )
-
-        # Check intersection with left edge of the rectangle
-        left_mask = np.logical_and(
-            x1[non_vertical_horizontal_mask] < rect_left,
-            x2[non_vertical_horizontal_mask] > rect_left,
-        )
-        left_mask &= np.logical_and(
-            rect_top < slope * rect_left + intercept,
-            slope * rect_left + intercept < rect_bottom,
-        )
-        if np.any(left_mask):
+        # We may have to refine points for a coarse line
+        if np.any(
+            (line_points[:, 0] < rect_right)
+            & (line_points[:, 0] > rect_left)
+            & (line_points[:, 1] < rect_bottom)
+            & (line_points[:, 1] > rect_top)
+        ):
             return 1
-
-        # Check intersection with right edge of the rectangle
-        right_mask = np.logical_and(
-            x1[non_vertical_horizontal_mask] < rect_right,
-            x2[non_vertical_horizontal_mask] > rect_right,
-        )
-        right_mask &= np.logical_and(
-            rect_top < slope * rect_right + intercept,
-            slope * rect_right + intercept < rect_bottom,
-        )
-        if np.any(right_mask):
-            return 1
-
-        # Check intersection with top edge of the rectangle
-        top_mask = np.logical_and(
-            y1[non_vertical_horizontal_mask] < rect_top,
-            y2[non_vertical_horizontal_mask] > rect_top,
-        )
-        top_mask &= np.logical_and(
-            rect_left < (rect_top - intercept) / slope,
-            (rect_top - intercept) / slope < rect_right,
-        )
-        if np.any(top_mask):
-            return 1
-
-        # Check intersection with bottom edge of the rectangle
-        bottom_mask = np.logical_and(
-            y1[non_vertical_horizontal_mask] < rect_bottom,
-            y2[non_vertical_horizontal_mask] > rect_bottom,
-        )
-        bottom_mask &= np.logical_and(
-            rect_left < (rect_bottom - intercept) / slope,
-            (rect_bottom - intercept) / slope < rect_right,
-        )
-        if np.any(bottom_mask):
-            return 1
-
-        return 0
+        else:
+            return 0
 
     def route_points_closest_to_center(self, bbox_center, routes):
         closest_indices = []
@@ -223,8 +150,38 @@ class Solution:
 
         return f"{prefix}-{suffix}"
 
+    def check_rectangle_overlap(self, rect_left, rect_top, rect_width, rect_height):
+        num_rectangles = len(rect_left)
+        if num_rectangles == 1:
+            return False
+
+        for i in range(num_rectangles):
+            left_i = rect_left[i]
+            top_i = rect_top[i]
+            right_i = left_i + rect_width
+            bottom_i = top_i + rect_height
+
+            for j in range(i + 1, num_rectangles):
+                left_j = rect_left[j]
+                top_j = rect_top[j]
+                right_j = left_j + rect_width
+                bottom_j = top_j + rect_height
+
+                # Check if rectangles i and j overlap
+                if not (
+                    left_i > right_j
+                    or right_i < left_j
+                    or top_i > bottom_j
+                    or bottom_i < top_j
+                ):
+                    return 1
+
+        return 0
+
     def write_label_locations(self, output_path):
         label_dict = {}
+        rect_left = []
+        rect_top = []
         for it, route in enumerate(self.routes):
             counter = 0
             while True:
@@ -233,8 +190,21 @@ class Solution:
                 rectangle_origin = self.get_route_label_origin(
                     closest_point, self.routes
                 )
+
                 if rectangle_origin is not None:
-                    break
+                    rect_left.append(rectangle_origin[0] - self.tolerance)
+                    rect_top.append(rectangle_origin[1] - self.tolerance)
+                    check_overlap = self.check_rectangle_overlap(
+                        rect_left,
+                        rect_top,
+                        self.width + self.tolerance,
+                        self.height + self.tolerance,
+                    )
+                    if check_overlap:
+                        rect_left.pop()
+                        rect_top.pop()
+                    else:
+                        break
 
                 if counter > 0:
                     # We want to both try positive and Negative direction
@@ -242,11 +212,23 @@ class Solution:
                     rectangle_origin = self.get_route_label_origin(
                         closest_point, self.routes
                     )
-
                     if rectangle_origin is not None:
-                        break
+                        rect_left.append(rectangle_origin[0] - self.tolerance)
+                        rect_top.append(rectangle_origin[1] - self.tolerance)
+                        check_overlap = self.check_rectangle_overlap(
+                            rect_left,
+                            rect_top,
+                            self.width + self.tolerance,
+                            self.height + self.tolerance,
+                        )
+                        if check_overlap:
+                            rect_left.pop()
+                            rect_top.pop()
+                        else:
+                            break
 
                 counter += 1
+
             label_position = self.get_label_position(closest_point, rectangle_origin)
             label_dict[it] = {
                 "point_x": closest_point[0],
