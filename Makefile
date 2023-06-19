@@ -21,3 +21,8 @@ run:
 	$(call REQUIRE,ROUTE_FILE)
 	$(call REQUIRE,OUTPUT_FILE)
 	poetry run python -m src.route $(ROUTE_FILE) $(OUTPUT_FILE)
+
+run_bbox:
+	$(call REQUIRE,ROUTE_FILE)
+	$(call REQUIRE,OUTPUT_FILE)
+	poetry run python -m src.route_bbox $(ROUTE_FILE) $(OUTPUT_FILE)
