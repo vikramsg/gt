@@ -13,9 +13,6 @@ help:
 	@echo "run - run routes"
 
 
-lint:
-	./linter.sh
-	
 install:
 	poetry install --no-root
 	poetry shell
