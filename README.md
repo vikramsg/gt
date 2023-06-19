@@ -24,6 +24,11 @@ make install
 
 ## Run
 
+The input and output files have to be provided, for eg. in the following manner. 
+```
+make run ROUTE_FILE=basic_test_routes.txt OUTPUT_FILE=labels_out.tx
+```
+
 
 ## Development notes
 

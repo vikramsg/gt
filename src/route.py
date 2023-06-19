@@ -18,7 +18,7 @@ class Solution:
             self.bbox_center, self.routes
         )
 
-        self.cell_width_x, self.cell_width_y = None, None
+        self.cell_width, self.cell_height = None, None
         self.grid_x, self.grid_y = self.create_grid(self.routes)
 
     def bbox_center(self):
@@ -167,11 +167,52 @@ class Solution:
         return occupancy
 
     def get_label_locations(self, np_routes, closest_indices, occupancy):
+        label_dict = {}
         for it, route in enumerate(np_routes):
             closest_to_center_index = closest_indices[it]
             # For now, all we will do is fill up the closes non-occupied cell
+            route_point = route[closest_to_center_index]
+            cell_x, cell_y = self.determine_cell(
+                route_point, self.cell_width, self.cell_height
+            )
+            # ToDo: This does not take aesthetic constraints into mind
+            if not occupancy[cell_y][cell_x]:
+                label_dict[it] = {
+                    "point_x": route_point[0],
+                    "point_y": route_point[1],
+                    "position": "bottom-right",
+                }
+                occupancy[cell_y][cell_x] = 1
 
-    def set_occupancy_from_routes(self):
+            elif not occupancy[cell_y][cell_x - 1]:
+                label_dict[it] = {
+                    "point_x": route_point[0],
+                    "point_y": route_point[1],
+                    "position": "bottom-left",
+                }
+                occupancy[cell_y][cell_x - 1] = 1
+
+            elif not occupancy[cell_y - 1][cell_x]:
+                label_dict[it] = {
+                    "point_x": route_point[0],
+                    "point_y": route_point[1],
+                    "position": "top-right",
+                }
+                occupancy[cell_y - 1][cell_x] = 1
+
+            elif not occupancy[cell_y - 1][cell_x - 1]:
+                label_dict[it] = {
+                    "point_x": route_point[0],
+                    "point_y": route_point[1],
+                    "position": "top-left",
+                }
+                occupancy[cell_y - 1][cell_x - 1] = 1
+            else:
+                raise NotImplementedError("This has not been implemented yet")
+
+        return label_dict
+
+    def write_label_locations(self, output_path):
         # ToDo: We should read each line directly as numpy arrays
 
         grid_x, grid_y = self.grid_x, self.grid_y
@@ -193,17 +234,26 @@ class Solution:
         # and determine an empty cell close by
         # For now, we just create a dict for this
 
-        self.get_label_locations(self.routes, self.closest_indices, occupancy)
+        label_dict = self.get_label_locations(
+            self.routes, self.closest_indices, occupancy
+        )
 
-        return occupancy
+        with open(output_path, "w") as fp:
+            for it in range(len(self.routes)):
+                fp.write(
+                    f"""{label_dict[it]["point_x"]} {label_dict[it]["point_y"]} {label_dict[it]["position"]}\n"""
+                )
+
+        return
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("routes_path", type=str)
+    parser.add_argument("output_path", type=str)
     args = parser.parse_args()
 
     parsed_routes = parse_routes(args.routes_path)
 
     sol = Solution(parsed_routes)
-    sol.set_occupancy_from_routes()
+    sol.write_label_locations(args.output_path)

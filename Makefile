@@ -1,6 +1,7 @@
 .PHONY: install test lint check run 
 
 ROUTE_FILE ?=
+OUTPUT_FILE ?=
 
 define REQUIRE
   $(if $(value $(1)),,$(error $(1) is required))
@@ -21,4 +22,5 @@ install:
 
 run:
 	$(call REQUIRE,ROUTE_FILE)
-	poetry run python -m src.route $(ROUTE_FILE)
+	$(call REQUIRE,OUTPUT_FILE)
+	poetry run python -m src.route $(ROUTE_FILE) $(OUTPUT_FILE)
