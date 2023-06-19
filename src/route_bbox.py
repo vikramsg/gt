@@ -226,8 +226,27 @@ class Solution:
     def write_label_locations(self, output_path):
         label_dict = {}
         for it, route in enumerate(self.routes):
-            closest_point = route[self.closest_indices[it]]
-            rectangle_origin = self.get_route_label_origin(closest_point, self.routes)
+            counter = 0
+            while True:
+                # Move away from center point if we don't find a match
+                closest_point = route[self.closest_indices[it] + counter]
+                rectangle_origin = self.get_route_label_origin(
+                    closest_point, self.routes
+                )
+                if rectangle_origin is not None:
+                    break
+
+                if counter > 0:
+                    # We want to both try positive and Negative direction
+                    closest_point = route[self.closest_indices[it] - counter]
+                    rectangle_origin = self.get_route_label_origin(
+                        closest_point, self.routes
+                    )
+
+                    if rectangle_origin is not None:
+                        break
+
+                counter += 1
             label_position = self.get_label_position(closest_point, rectangle_origin)
             label_dict[it] = {
                 "point_x": closest_point[0],
