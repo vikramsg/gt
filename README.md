@@ -31,24 +31,16 @@ make run ROUTE_FILE=zurich_bern_routes.txt OUTPUT_FILE=labels_zurich_bern.txt
 ```
 
 
-## Development notes
+## Algorithm
 
-1. There are multiple polylines in a file
-2. Each polyline can have potentially thousands of points, so NumPy is probably the correct way to store them
-3. However, DS will also depend on algorithm
+1. We first determine the bounding box and then divide the grid into cells
+2. We set an occupancy inside the cells if points in the route pass through them
+3. Then we try to find empty cells close to the center of the grid
+4. If they exist, then we set that to be the required location
+5. If not, we find the closest empty cell and set that. 
 
 
-## Algorithm notes
-
-### Requirements
-
-1. Each polyline is a separate route
-2. Hard requirement
-    a. With choices of top-left, top-right, bottom-left, bottom-right, mark labels
-    b. Is it one label. Doing one label is sufficient?
-    c. Input is only through stdin?
-    d. Will the input be valid?
-3. Soft Requirements
-4. Labels to be placed at arbitrary points, but they must be placed at points to distinguish between routes. 
-5. Labels as close to center of overall bounding box as possible
-6. To start with assume labels are of size 100x50, and they should not cover any routes. But ideally this should be at any zoom level.
+### Enhancements
+1. There are bugs with the current approach which seems to not show the correct occupancy
+2. We can get rid of a lot of for loops and use vectorization
+3. To find aesthetically pleasing locations, we want to make sure that the cell lines don't have multiple overlaps with the route
