@@ -209,8 +209,8 @@ class Solution:
                     else:
                         break
 
+                # We want to both try positive and Negative direction
                 if counter > 0:
-                    # We want to both try positive and Negative direction
                     closest_point = route[self.closest_indices[it] - counter]
                     rectangle_origin = self.get_route_label_origin(
                         closest_point, self.routes
