@@ -78,7 +78,7 @@ class Solution:
         return bbox_routes
 
     def create_grid(self, routes, label_width=100, label_height=50):
-        # ToDo: convert these to a class so that label width, and height are available
+        # ToDo: label width and height could be associated to zoom level
         routes_bbox = self.bbox(routes)
         # Extend the bbox by width and height on both sides
         routes_bbox = (
@@ -110,6 +110,7 @@ class Solution:
         )
         self.cell_width = x[1] - x[0]
         self.cell_height = y[1] - y[0]
+
         return np.meshgrid(x, y)
 
     def refine_line(self, points, n):
@@ -154,7 +155,7 @@ class Solution:
         cell_width = grid_x[0][1] - grid_x[0][0]
         cell_height = grid_y[1][0] - grid_y[0][0]
 
-        refined_points = self.refine_line(route, 10)
+        refined_points = self.refine_line(route, 4)
         for point in refined_points:
             cell_x, cell_y = self.determine_cell(point, cell_width, cell_height)
 
@@ -166,6 +167,87 @@ class Solution:
 
         return occupancy
 
+    def find_closest_empty_occupancy(self, cell_x, cell_y, occupancy):
+        size_y, size_x = occupancy.shape
+
+        min_distance = size_x**2 + size_y**2
+
+        closest_x, closest_y = (None, None)
+        for i in range(size_x):
+            for j in range(size_y):
+                if occupancy[j][i] == 0:
+                    if ((j - cell_y) ** 2 + (i - cell_x) ** 2) < min_distance:
+                        min_distance = (j - cell_y) ** 2 + (i - cell_x) ** 2
+                        closest_x, closest_y = (i, j)
+
+        return closest_x, closest_y
+
+    def find_closest_point_to_cell(self, cell_x, cell_y, route):
+        cell_point = self.grid_x[cell_y][cell_x], self.grid_y[cell_y][cell_x]
+        distances = np.linalg.norm(route - cell_point, axis=1)
+        closest_index = np.argmin(distances)
+
+        return closest_index
+
+    def get_dict_for_cell(
+        self, key, route, route_point, cell_x, cell_y, occupancy, label_dict
+    ):
+        if not occupancy[cell_y][cell_x]:
+            label_dict[key] = {
+                "point_x": route_point[0],
+                "point_y": route_point[1],
+                "position": "bottom-right",
+            }
+            occupancy[cell_y][cell_x] = 1
+
+        elif not occupancy[cell_y][cell_x - 1]:
+            label_dict[key] = {
+                "point_x": route_point[0],
+                "point_y": route_point[1],
+                "position": "bottom-left",
+            }
+            occupancy[cell_y][cell_x - 1] = 1
+
+        elif not occupancy[cell_y - 1][cell_x]:
+            label_dict[key] = {
+                "point_x": route_point[0],
+                "point_y": route_point[1],
+                "position": "top-right",
+            }
+            occupancy[cell_y - 1][cell_x] = 1
+
+        elif not occupancy[cell_y - 1][cell_x - 1]:
+            label_dict[key] = {
+                "point_x": route_point[0],
+                "point_y": route_point[1],
+                "position": "top-left",
+            }
+            occupancy[cell_y - 1][cell_x - 1] = 1
+        else:
+            # We have to determine closest point inside occupancy that is not occupied
+            # FIXME: Then we find closest point to this on route
+            closest_x, closest_y = self.find_closest_empty_occupancy(
+                cell_x, cell_y, occupancy
+            )
+            if closest_x > cell_x:
+                suffix = "right"
+            else:
+                suffix = "left"
+            if closest_y > cell_y:
+                prefix = "bottom"
+            else:
+                prefix = "top"
+
+            closest_index = self.find_closest_point_to_cell(closest_x, closest_y, route)
+            label_dict[key] = {
+                "point_x": route[closest_index][0],
+                "point_y": route[closest_index][1],
+                "position": f"{prefix}-{suffix}",
+            }
+            occupancy[closest_y][closest_x] = 1
+
+        return label_dict
+
     def get_label_locations(self, np_routes, closest_indices, occupancy):
         label_dict = {}
         for it, route in enumerate(np_routes):
@@ -175,40 +257,10 @@ class Solution:
             cell_x, cell_y = self.determine_cell(
                 route_point, self.cell_width, self.cell_height
             )
-            # ToDo: This does not take aesthetic constraints into mind
-            if not occupancy[cell_y][cell_x]:
-                label_dict[it] = {
-                    "point_x": route_point[0],
-                    "point_y": route_point[1],
-                    "position": "bottom-right",
-                }
-                occupancy[cell_y][cell_x] = 1
 
-            elif not occupancy[cell_y][cell_x - 1]:
-                label_dict[it] = {
-                    "point_x": route_point[0],
-                    "point_y": route_point[1],
-                    "position": "bottom-left",
-                }
-                occupancy[cell_y][cell_x - 1] = 1
-
-            elif not occupancy[cell_y - 1][cell_x]:
-                label_dict[it] = {
-                    "point_x": route_point[0],
-                    "point_y": route_point[1],
-                    "position": "top-right",
-                }
-                occupancy[cell_y - 1][cell_x] = 1
-
-            elif not occupancy[cell_y - 1][cell_x - 1]:
-                label_dict[it] = {
-                    "point_x": route_point[0],
-                    "point_y": route_point[1],
-                    "position": "top-left",
-                }
-                occupancy[cell_y - 1][cell_x - 1] = 1
-            else:
-                raise NotImplementedError("This has not been implemented yet")
+            self.get_dict_for_cell(
+                it, route, route_point, cell_x, cell_y, occupancy, label_dict
+            )
 
         return label_dict
 

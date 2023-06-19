@@ -26,7 +26,8 @@ make install
 
 The input and output files have to be provided, for eg. in the following manner. 
 ```
-make run ROUTE_FILE=basic_test_routes.txt OUTPUT_FILE=labels_out.tx
+make run ROUTE_FILE=basic_test_routes.txt OUTPUT_FILE=labels_out.txt
+make run ROUTE_FILE=zurich_bern_routes.txt OUTPUT_FILE=labels_zurich_bern.txt
 ```
 
 
